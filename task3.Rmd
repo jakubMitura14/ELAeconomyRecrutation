@@ -1,0 +1,612 @@
+---
+title: "task 3"
+output: html_notebook
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+#Polecenie
+
+Interesuje nas od czego zależy skłonność absolwenta do podjęcia pracy w
+formie własnej działalności gospodarczej bezpośrednio rok po uzyskaniu
+dyplomu (czy jest wyższa lub niższa od przeciętnej w zależności od cech
+uczelni, studentów, kierunku studiów). Opisz w kilku punktach
+najważniejsze kroki analiz, które doprowadzą do odpowiedzi na to
+pytanie. W szczególności opisz: co jest zmienną zależną, a co zmienną
+niezależną, jaki model statystyczny wykorzystasz, uzasadnij dobór modelu
+
+
+```{r}
+library(tidyverse) 
+library(tibble)
+library(purrr)
+library(reshape2)
+library(ggplot2)
+library(ggthemes)
+library(ggpubr)
+library(bnlearn)
+library(bnmonitor)
+library(abn)
+library(zoom)
+library(Rmpfr)
+```
+
+Ładowanie danych
+
+```{r}
+
+graduates_major_data_1_ <- read_delim("graduates-major-data (1).csv", 
+    delim = ";", escape_double = FALSE, col_types = cols(P_ROKDYP = col_integer(), 
+        P_KIERUNEK_ID = col_integer(), P_N = col_integer(), 
+        P_N_WZUS = col_integer(), P_N_POZAZUS = col_integer(), 
+        P_PROC_WZUS = col_integer(), P_PROC_POZAZUS = col_integer()), 
+    trim_ws = TRUE)
+graduates_majorTibb <-as_tibble(graduates_major_data_1_)
+```
+
+```{r}
+graduates_institution_data_1_ <- read_delim("graduates-institution-data (1).csv", 
+    delim = ";", escape_double = FALSE, trim_ws = TRUE)
+graduates_institutionTibb <-as_tibble(graduates_institution_data_1_)
+
+```
+
+wybieramy kolumny ktore nas interesuja i formatujemy nazwy kierunków
+
+```{r}
+
+onlyColOfIntr<- graduates_majorTibb%>%select(
+  P_CZY_SAMOZ_P1
+  ,P_N
+  ,P_DZIEDZINA
+  
+  ,P_CZY_SAMOZ_DOSW_REKR
+  ,P_CZY_SAMOZ_DOSW_STUDIA
+  
+  ,P_CZY_SAMOZ_ODLJEDN1
+  ,P_CZY_SAMOZ_ODLJEDN2
+  ,P_CZY_SAMOZ_ODLJEDN3
+  
+  ,P_ROKDYP
+  ,P_POZIOM
+  ,P_FORMA
+  
+  ,P_PROC_DOSW
+  ,P_CZAS_PRACA
+  
+  ,P_CZAS_PRACA_DOSW
+  ,P_CZAS_PRACA_NDOSW
+  
+  ,P_CZY_BEZR_P1
+  ,P_CZY_BEZR_DOSW_P1
+  ,P_CZY_BEZR_NDOSW_P1
+  
+  ,P_E_ZAR_P1
+  ,P_E_ZAR_DOSW_P1
+  ,P_E_ZAR_NDOSW_P1
+  
+  ,P_N_KMZ1_NAJW_MIASTA
+  ,P_N_KMZ2_MIASTA_POWIATOWE
+  ,P_N_KMZ3_MNIEJSZE_MIEJSC
+  
+  ,P_CZY_SAMOZ_KMZ1
+  ,P_CZY_SAMOZ_KMZ2
+  ,P_CZY_SAMOZ_KMZ3
+  
+  ,P_N_ODLJEDN1_POWIAT
+  ,P_N_ODLJEDN2_WOJ
+  ,P_N_ODLJEDN3_NWOJ
+  ,P_KIERUNEK_NAZWA
+  ,P_UCZELNIA_SKROT
+  ,P_WOJ
+  ,P_DZIEDZINA)%>%
+  mutate(P_KIERUNEK_NAZWA = map_chr(P_KIERUNEK_NAZWA, ~str_trim(.x)))%>%
+mutate(P_KIERUNEK_NAZWA = map_chr(P_KIERUNEK_NAZWA, ~str_replace(.x, 
+                                         pattern = " - k. unikatowy", 
+                                         replacement = "")))%>%
+mutate(P_KIERUNEK_NAZWA = map_chr(P_KIERUNEK_NAZWA, ~str_replace(.x, 
+                                         pattern = "Makrokierunek -", 
+                                         replacement = "")))%>%
+mutate(P_KIERUNEK_NAZWA = map_chr(P_KIERUNEK_NAZWA, ~str_replace(.x, 
+                                         pattern = "(uam)", 
+                                         replacement = "")))%>%    
+mutate(P_KIERUNEK_NAZWA = map_chr(P_KIERUNEK_NAZWA, ~str_replace(.x, 
+                                         pattern = "kierunek", 
+                                         replacement = "")))%>%    
+mutate(P_KIERUNEK_NAZWA = map_chr(P_KIERUNEK_NAZWA, ~tolower(.x)))
+onlyColOfIntr
+```
+
+
+
+
+Wybieramy 10 najpopularniejszych kierunków
+```{r}
+chosenSubjects<-onlyColOfIntr%>%select(P_KIERUNEK_NAZWA,P_N)%>%
+#filter()%>%
+
+group_by(P_KIERUNEK_NAZWA)%>%
+summarise(sumKierunek= sum(P_N)) %>%
+  arrange(desc(sumKierunek)) %>%
+  top_n(10)
+
+chosenSubjects$P_KIERUNEK_NAZWA
+```
+
+Modyfikujemy kolumne P_KIERUNEK_NAZWA tak ze zostawiamy jedynie nazwy 10 najpopularniejszych kierunko w pozostalych przypadkach zamieniamy ja na nazwe dziedziny
+```{r}
+onlyColOfIntr<-onlyColOfIntr%>%#select(P_DZIEDZINA)%>% distinct()
+mutate(P_KIERUNEK_NAZWA = ifelse(P_KIERUNEK_NAZWA%in%chosenSubjects$P_KIERUNEK_NAZWA,P_KIERUNEK_NAZWA ,P_DZIEDZINA))
+
+```
+Dodanie kolumny o licznosci studentow na uczelniach dane z  graduates_institution csv 
+```{r}
+
+licznoscKierunku<-graduates_institutionTibb%>%select(U_N,U_UCZELNIA_SKROT)%>%rename(P_UCZELNIA_SKROT=U_UCZELNIA_SKROT)
+#onlyColOfIntr%>%select(P_UCZELNIA_SKROT)
+#licznoscKierunku%>%select(P_UCZELNIA_SKROT)
+
+joinedd<-inner_join(licznoscKierunku,onlyColOfIntr, by='P_UCZELNIA_SKROT')
+joinedd%>%select(P_KIERUNEK_NAZWA, U_N )
+```
+
+
+Ustawianie poprawnych typow
+
+```{r}
+
+properTypesTibble<-joinedd%>%
+  #first passing char to numbers
+  mutate(across(P_CZY_SAMOZ_P1, ~parse_number(., locale = locale(decimal_mark = ","))))%>%
+  mutate(across(P_CZAS_PRACA_DOSW, ~parse_number(., locale = locale(decimal_mark = ","))))%>%
+  mutate(across(P_CZAS_PRACA_NDOSW, ~parse_number(., locale = locale(decimal_mark = ","))))%>%
+  mutate(across(P_CZY_BEZR_DOSW_P1, ~parse_number(., locale = locale(decimal_mark = ","))))%>%
+  mutate(across(P_CZY_BEZR_NDOSW_P1, ~parse_number(., locale = locale(decimal_mark = ","))))%>%
+  #mutate(across(P_PROC_DOSW, ~parse_number(., locale = locale(decimal_mark = ","))))%>%
+
+  # zmienne typu factor
+  mutate(P_POZIOM = as.factor(P_POZIOM))%>%
+  mutate(P_FORMA = as.factor(P_FORMA))%>%
+  mutate(P_UCZELNIA_SKROT  = as.factor(P_UCZELNIA_SKROT ))%>%
+  mutate(P_DZIEDZINA   = as.factor(P_DZIEDZINA  ))%>%
+  
+  mutate(P_KIERUNEK_NAZWA = as.factor(P_KIERUNEK_NAZWA))%>%
+  #mutate(P_NAZWA_UCZELNI = as.factor(P_NAZWA_UCZELNI))%>%
+  mutate(P_WOJ = as.factor(P_WOJ))%>%
+
+
+  #zmienne int (ale na potrzeby bn learn ustalamy je jako double)
+  mutate(P_CZY_SAMOZ_DOSW_REKR = as.double(P_CZY_SAMOZ_DOSW_REKR))%>%
+  mutate(P_CZY_SAMOZ_DOSW_STUDIA = as.double(P_CZY_SAMOZ_DOSW_STUDIA))%>%
+  mutate(P_CZY_SAMOZ_ODLJEDN1 = as.double(P_CZY_SAMOZ_ODLJEDN1))%>%
+  mutate(P_CZY_SAMOZ_ODLJEDN2 = as.double(P_CZY_SAMOZ_ODLJEDN2))%>%
+  mutate(P_CZY_SAMOZ_ODLJEDN3 = as.double(P_CZY_SAMOZ_ODLJEDN3))%>%
+
+  
+  mutate(P_E_ZAR_DOSW_P1 = as.double(P_E_ZAR_DOSW_P1))%>%
+  mutate(P_E_ZAR_NDOSW_P1 = as.double(P_E_ZAR_NDOSW_P1))%>%
+  mutate(P_N_KMZ1_NAJW_MIASTA = as.double(P_N_KMZ1_NAJW_MIASTA))%>%
+  
+  mutate(P_CZAS_PRACA = as.double(P_CZAS_PRACA))%>%
+  mutate(P_CZY_BEZR_P1 = as.double(P_CZY_BEZR_P1))%>%
+  mutate(P_E_ZAR_P1 = as.double(P_E_ZAR_P1))%>%
+  
+  
+  mutate(P_N_KMZ2_MIASTA_POWIATOWE = as.double(P_N_KMZ2_MIASTA_POWIATOWE))%>%
+  mutate(P_N_KMZ3_MNIEJSZE_MIEJSC = as.double(P_N_KMZ3_MNIEJSZE_MIEJSC))%>%
+  
+  mutate(P_CZY_SAMOZ_KMZ1 = as.double(P_CZY_SAMOZ_KMZ1))%>%
+  mutate(P_CZY_SAMOZ_KMZ1 = as.double(P_CZY_SAMOZ_KMZ1))%>%
+  
+  mutate(P_CZY_SAMOZ_KMZ2 = as.double(P_CZY_SAMOZ_KMZ2))%>%
+  mutate(P_CZY_SAMOZ_KMZ3 = as.double(P_CZY_SAMOZ_KMZ3))%>%
+  
+  mutate(P_N_ODLJEDN1_POWIAT = as.double(P_N_ODLJEDN1_POWIAT))%>%
+  mutate(P_N_ODLJEDN2_WOJ = as.double(P_N_ODLJEDN2_WOJ))%>%
+  mutate(P_N_ODLJEDN3_NWOJ = as.double(P_N_ODLJEDN3_NWOJ))%>%
+  mutate(P_N = as.double(P_N))%>%
+
+  
+  mutate(P_ROKDYP = as.double(P_ROKDYP))
+
+
+
+
+
+properTypesTibble
+```
+
+
+
+
+
+
+Zmieniamy nazwy na krtotsze
+
+```{r}
+properNamesTibble<-properTypesTibble%>%
+  rename(isS=P_CZY_SAMOZ_P1 )%>%
+  
+ rename(SandExp=P_CZY_SAMOZ_DOSW_REKR)%>%
+ rename(SnoExp= P_CZY_SAMOZ_DOSW_STUDIA  )%>%
+  
+  rename(Sdom=P_CZY_SAMOZ_ODLJEDN1)%>%
+  rename(Swoj=P_CZY_SAMOZ_ODLJEDN2 )%>%
+  rename(Sobc=P_CZY_SAMOZ_ODLJEDN3 )%>%
+   
+   rename(ndom= P_N_ODLJEDN1_POWIAT   )%>%
+   rename(nwoj= P_N_ODLJEDN2_WOJ   )%>%
+   rename(nobc= P_N_ODLJEDN3_NWOJ   )%>%
+
+
+    rename( rokDyp =P_ROKDYP )%>%
+   rename( pozm = P_POZIOM)%>%
+  rename( form =P_FORMA)%>%
+   
+   rename( prExp=P_PROC_DOSW  )%>%
+
+   rename( tLookExp = P_CZAS_PRACA_DOSW   )%>%
+   rename( tLookNoob=P_CZAS_PRACA_NDOSW   )%>%
+   rename( tLook=P_CZAS_PRACA   )%>%
+  
+   rename( prLazyExp=P_CZY_BEZR_DOSW_P1   )%>%
+   rename( prLazyNoob=P_CZY_BEZR_NDOSW_P1   )%>%
+   rename( prLazy=P_CZY_BEZR_P1   )%>%
+  
+
+   rename( incExp=P_E_ZAR_DOSW_P1   )%>%
+   rename( incNoob=P_E_ZAR_NDOSW_P1   )%>%
+   rename( inc=P_E_ZAR_P1   )%>%
+   
+   rename( bCity=P_N_KMZ1_NAJW_MIASTA   )%>%
+   rename( smCity=P_N_KMZ2_MIASTA_POWIATOWE   )%>%
+   rename( vill=P_N_KMZ3_MNIEJSZE_MIEJSC   )%>%
+   
+   rename( SbCity=P_CZY_SAMOZ_KMZ1   )%>%
+   rename( SsmCity=P_CZY_SAMOZ_KMZ2   )%>%
+   rename( Svill=P_CZY_SAMOZ_KMZ3   )%>%
+   
+  
+   rename( kier= P_KIERUNEK_NAZWA   )%>%
+   rename( nUcz= U_N   )%>%
+   rename( dziedz= P_DZIEDZINA    )%>%
+   rename( uczSkr= P_UCZELNIA_SKROT    )%>%
+  rename( woj = P_WOJ)
+
+
+properNamesTibble
+```
+
+Teraz ustalamy struktóre sieci baysianowskiej ważne że zmienna dyskretan
+nie moze mieć jako "rodzica" zmiennej ciągłej
+
+```{r}
+dfPrim<-as.data.frame(properNamesTibble)
+```
+
+Dyskretyzacja przy zastosowaniu algorytmu hartemink - opartego na analizie "mutual information"
+
+```{r}
+df<- discretize(dfPrim, method = 'hartemink')
+df
+```
+
+pierwsza proba stworzenia zaleznosci 
+```{r}
+wl = matrix(c("isS","SandExp"
+              ,"isS","SnoExp"
+              
+              ,"prExp","SandExp"
+              ,"prExp","SnoExp"
+              
+              ,"isS","Sdom"
+              ,"isS","Swoj"
+              ,"isS","Sobc"
+              
+              ,"ndom","Sdom"
+              ,"nwoj","Swoj"
+              ,"nobc","Sobc"             
+              
+              
+              ,"bCity","SbCity"
+              ,"smCity","SsmCity"
+              ,"vill","Svill"
+              
+              ,"isS","SbCity"
+              ,"isS","SsmCity"
+              ,"isS","Svill" 
+              
+              ,"rokDyp","isS"
+              ,"pozm","isS"
+              ,"form","isS"
+              ,"tLookExp","isS"
+              ,"tLookNoob","isS"
+              
+              ,"prExp","tLookExp"
+              ,"prExp","tLookNoob"    
+              
+              ,"prExp","SandExp"
+              ,"prExp","SnoExp"                   
+              
+              ,"prExp","prLazyExp"
+              ,"prExp","prLazyNoob" 
+              
+              ,"prExp","incExp"
+              ,"prExp","incNoob"
+              
+              
+              ,"incExp","isS"
+              ,"incNoob","isS"
+
+              ,"prLazyExp","isS"
+              ,"prLazyNoob","isS"
+              #,"kier","isS"
+              #,"ucz","isS"
+              ,"woj","isS"
+              
+              ,"rokDyp","isS"
+              ,"pozm","isS"
+              ,"form","isS"
+
+              
+), ncol = 2, byrow = TRUE,
+      dimnames = list(NULL, c("from", "to")))
+wl
+```
+
+struktra automatycznie wygenerowana plus sugestie z listy powyzej (duza liczba polaczen - prosty model odrzucony)
+```{r}
+# net <-pc.stable(df,whitelist = wl)
+# graphviz.plot(net, layout = "dot")
+
+
+```
+
+```{r}
+# graphviz.plot(net, layout = "twopi")
+# #zm()
+colnames(properNamesTibble)
+```
+
+
+Kolejne podejscie 
+```{r}
+smallerColList=c("nUcz","isS", "rokDyp","pozm","form","prExp",  "inc","bCity","smCity","ndom", "nwoj",  "kier", "woj")
+
+smallerColListWithLatent= c("nUcz","isS", "rokDyp","pozm","form","prExp" 
+  ,"inc","bCity","smCity","ndom", "nwoj",  "kier", "woj","latentLoc", "latentUcz")
+
+
+wlB = matrix(c("ndom","latentLoc"
+              ,"nwoj","latentLoc"
+
+              ,"latentLoc","isS"             
+              
+              
+              ,"bCity","latentLoc"
+              ,"smCity","latentLoc"
+
+
+	,"prExp","inc"
+
+              ,"inc","isS"
+	              ,"kier","isS"
+              ,"nUcz","latentUcz"
+              ,"woj","latentLoc"
+              
+              ,"rokDyp","latentUcz"
+              ,"pozm","latentUcz"
+              ,"form","latentUcz"
+              ,"latentUcz", "isS"
+	
+
+), ncol = 2, byrow = TRUE,
+      dimnames = list(NULL, c("from", "to")))
+wlB
+
+```
+dodajemy zmienna ukrytą (latent variable)
+```{r}
+dfLatent<-df%>% add_column(latentLoc = NA)%>% add_column(latentUcz = NA)
+dfLatent$latentLoc <- factor(dfLatent$latentLoc, levels = c(1,2,3))
+dfLatent$latentUcz <- factor(dfLatent$latentUcz, levels = c(1,2,3))
+#ustawiamy jakiekolwiek wartosci w celu unikniecia sytuacji ze zmienne latentne maja tylko warotsci Na - co zapobiega mozliwosci uzycia niektorych algorytmow
+dfLatent['latentLoc',1]<-1
+dfLatent['latentUcz',1]<-1
+
+dfLatent
+```
+
+
+
+
+```{r}
+smallerGraph = empty.graph(smallerColListWithLatent)
+arcs(smallerGraph) = wlB
+graphviz.plot(smallerGraph, layout = "dot")
+```
+
+```{r}
+fitted = bn.fit(smallerGraph,dfLatent[smallerColListWithLatent],method = "bayes")
+```
+
+
+
+
+
+uzupelnienie wartosci brakujacych przy uzyciu grafu opracowanego powyzej w celu oceny istotnosci polaczen
+```{r}
+dfFilled<-impute(fitted,dfLatent[smallerColListWithLatent] )
+```
+
+```{r}
+dfFilled
+```
+
+
+```{r}
+#sens <- proportional_covar(bnfit = e, node = isS)
+strength <- arc.strength(smallerGraph,dfFilled)
+#plot(sens)
+strength.plot(smallerGraph, strength)
+```
+bootstrap function for caclulating edge strenths - based on calculating p values
+```{r}
+arcs = boot.strength(dfFilled, algorithm = "hc")
+
+
+```
+```{r}
+fromArches<-as_tibble(arcs)%>%arrange(desc(strength))%>%filter(from=='isS')%>%filter(strength>0.05)
+toArches<-as_tibble(arcs)%>%arrange(desc(strength))%>%filter(to=='isS')%>%filter(strength>0.05)
+toArches
+```
+
+```{r}
+ggplot(data=fromArches, aes(x=to, y=strength)) +
+  geom_bar(stat="identity", fill = "#FF6666")+ 
+  xlab("")+ 
+  ylab(" ")+
+  ggtitle("Siła zależności między zmienną isS a pozostałymi (próg odcięcia 0.05)")
+
+```
+
+
+
+
+```{r}
+glob_net_monit <- final_node_monitor(dag = smallerGraph, df = dfFilled)
+#glob_net_monit <- seq_marg_monitor(dag = e, df = df, node.name = 'isS')
+glob_net_monit
+```
+
+```{r}
+plot(glob_net_monit,which="conditional" )
+#plot(glob_net_monit,which="marginal" )
+
+```
+Kolejna proba 
+```{r}
+smallerColListWithLatentC<- c("nUcz","isS", "rokDyp","pozm","form","prExp" 
+  ,"inc","bCity","smCity","ndom", "nwoj",  "kier", "woj","latentLoc", "latentUcz")
+
+wlC = matrix(c("ndom","latentLoc" 
+               ,"nwoj","latentLoc"
+               ,"latentLoc","isS"
+               ,"bCity","latentLoc"
+              ,"smCity","latentLoc" 
+	
+              ,"prExp","inc"
+              ,"inc","isS"
+	            ,"kier","isS"
+              ,"nUcz","isS"
+              ,"woj","latentLoc"
+              
+              ,"rokDyp","isS"
+              ,"pozm","isS"
+              ,"form","isS"
+
+), ncol = 2, byrow = TRUE,
+      dimnames = list(NULL, c("from", "to")))
+
+
+smallerGraphC = empty.graph(smallerColListWithLatentC)
+arcs(smallerGraphC) = wlC
+graphviz.plot(smallerGraphC, layout = "dot")
+
+```
+
+
+
+```{r}
+strengthC <- arc.strength(smallerGraphC,dfFilled)
+#plot(sens)
+strength.plot(smallerGraphC, strength)
+
+
+```
+```{r}
+glob_net_monitC <- final_node_monitor(dag = smallerGraphC, df = dfFilled)
+plot(glob_net_monitC,which="conditional" )
+
+```
+```{r}
+smallerColListWithLatentD<- c("nUcz","isS", "rokDyp","pozm","form","prExp" 
+  ,"inc","bCity","smCity","ndom", "nwoj",  "kier", "woj","latentLoc", "latentUcz")
+
+wlD = matrix(c(
+                "ndom","isS" 
+               ,"nwoj","latentLoc"
+               ,"latentLoc","isS"
+               ,"bCity","latentLoc"
+              ,"smCity","isS" 
+	
+              ,"prExp","inc"
+              ,"inc","isS"
+	            ,"kier","isS"
+              ,"nUcz","latentUcz"
+              ,"woj","isS"
+              
+              ,"rokDyp","latentUcz"
+              ,"pozm","isS"
+              ,"form","isS"
+              ,"latentUcz","isS"
+
+), ncol = 2, byrow = TRUE,
+      dimnames = list(NULL, c("from", "to")))
+
+
+smallerGraphD = empty.graph(smallerColListWithLatentD)
+arcs(smallerGraphD) = wlD
+graphviz.plot(smallerGraphD, layout = "dot")
+```
+
+
+```{r}
+
+strengthD <- arc.strength(smallerGraphD,dfFilled)
+#plot(sens)
+strength.plot(smallerGraphD, strengthD)
+
+```
+
+```{r}
+pvalues = arc.strength(smallerGraphD,dfFilled, criterion = "x2")
+pvalues
+```
+
+```{r}
+strength.plot(smallerGraphD, strength = pvalues,threshold = 0.00001,cutpoints = c(0, 1e-300, 1e-250, 1e-200, 0.01, 1))
+```
+
+
+
+```{r}
+glob_net_monitC <- final_node_monitor(dag = smallerGraphC, df = dfFilled)
+plot(glob_net_monitC,which="conditional" )
+```
+
+
+# Porownanie modeli
+
+
+```{r}
+score(smallerGraph,dfFilled)
+```
+```{r}
+score(smallerGraphC,dfFilled)
+
+```
+
+
+```{r}
+score(smallerGraphD,dfFilled)
+
+```
+
+
+
+
+
+

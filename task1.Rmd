@@ -1,0 +1,82 @@
+---
+title: "zadanie 1"
+output: html_notebook
+---
+# polecenie
+Korzystając z wybranego programu statystycznego (preferowany Python lub R), zaprezentuj listę
+dziesięciu kierunków studiów na uczelniach, po których absolwenci studiów magisterskich mieli
+najwyższe zarobki pięć lat od uzyskania dyplomu. Weź pod uwagę tylko te kierunki, dla których można
+pozyskać dane o minimum 30 studentach.
+
+
+#plan
+filter
+1)studia magisterskie
+2)kierunki gdzie powyżej 30 studentów
+3)srednia lub mediana zarobków studentów pięć lat po uzyskaniu dyplomu
+4)wyświetl top 10
+
+
+
+```{r}
+library(tidyverse) 
+library(tibble)
+library(purrr)
+
+graduates_major_data_1_ <- read_delim("graduates-major-data (1).csv", 
+    delim = ";", escape_double = FALSE, col_types = cols(P_ROKDYP = col_integer(), 
+        P_KIERUNEK_ID = col_integer(), P_N = col_integer(), 
+        P_N_WZUS = col_integer(), P_N_POZAZUS = col_integer(), 
+        P_PROC_WZUS = col_integer(), P_PROC_POZAZUS = col_integer()), 
+    trim_ws = TRUE)
+as_tibble(graduates_major_data_1_)%>%
+select(P_KIERUNEK_NAZWA,P_POZIOM,P_N,P_E_ZAR_P5,P_ME_ZAR_P5)
+```
+
+```{r}
+
+#Sredie zarobki
+mainTib<-as_tibble(graduates_major_data_1_)%>%
+select(P_KIERUNEK_NAZWA,P_POZIOM,P_N,P_E_ZAR_P5,P_ME_ZAR_P5) %>%#potrzebujemy poziomu studiow - P_POZIOM, liczba studentow na kierunek  P_N  , zarobki pięć lat po uzyskaniu dyplomu (mediana) - P_ME_ZAR_P5
+filter(P_POZIOM==2 )%>%# tylko studia magisterskie
+#drop_na(P_E_ZAR_P5,P_N )%>% #jesli nie mamy danych ignorujemy 
+# frazy jak " - k. unikatowy" i "Makrokierunek -"  nie dodaja nowych wiadomosci 
+mutate(P_KIERUNEK_NAZWA = map_chr(P_KIERUNEK_NAZWA, ~str_replace(.x, 
+                                         pattern = " - k. unikatowy", 
+                                         replacement = "")))%>%
+mutate(P_KIERUNEK_NAZWA = map_chr(P_KIERUNEK_NAZWA, ~str_replace(.x, 
+                                         pattern = "Makrokierunek -", 
+                                         replacement = "")))%>%  
+mutate(P_KIERUNEK_NAZWA = map_chr(P_KIERUNEK_NAZWA, ~tolower(.x)))%>% # tak aby wyszukiwanie nie bylo zalezne od wielkosci liter   
+group_by(P_KIERUNEK_NAZWA)%>% # grupowanie po kierunkach potrzebne do dalszych agregacji
+summarise(sredniaZarKierunek = mean(P_E_ZAR_P5, na.rm = TRUE),P_NSum = sum(P_N, na.rm = TRUE),medianaKierunek = median(P_ME_ZAR_P5, na.rm = TRUE) )%>%
+filter(P_NSum>30 )%>%  # powyzej 30 studentow
+arrange(desc(sredniaZarKierunek))  # sortujemy po zarobkach 
+resSrednia<- top_n(mainTib,10,sredniaZarKierunek) # interesuje nas tylko 10 kierunków o najwyższych zarobkach
+resSrednia
+```
+
+```{r}
+# #mediana zarobkow
+resMediana<-mainTib%>%
+arrange(desc(medianaKierunek))%>%
+top_n(10,medianaKierunek) # interesuje nas tylko 10 kierunków o najwyższych zarobkach
+resMediana
+```
+```{r}
+ggplot(data=resSrednia, aes(x=reorder(P_KIERUNEK_NAZWA, sredniaZarKierunek ), y=sredniaZarKierunek)) +
+  geom_bar(stat="identity")+ 
+  coord_flip()+
+  xlab("")+ 
+  ylab("średnie zarobki ")
+```
+```{r}
+ggplot(data=resMediana, aes(x=reorder(P_KIERUNEK_NAZWA, medianaKierunek ), y=medianaKierunek)) +
+  geom_bar(stat="identity")+ 
+  coord_flip()+
+  xlab("")+ 
+  ylab("")+
+  ggtitle("Siła zależności między zmienną isS a pozostałymi (próg odcięcia 0.05)")
+```
+
+

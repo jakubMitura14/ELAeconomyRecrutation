@@ -1,0 +1,70 @@
+source https://ela.nauka.gov.pl/assets/pdf/ELA6_opis_badania_20210929.pdf
+
+„Praca a dalsze studia” - ”. Porównują one podstawowe
+wskaźniki opisujące ekonomiczne losy absolwentów w czasie, kiedy studiowali po uzyskaniu
+dyplomu oraz w czasie, kiedy nie studiowali.
+
+
+jest tło powiatowe z GUSU - żeby moc powownac do ogolu populacji
+
+wazne zalozenie ze nie spodziewamy sie ze odrazu bedzie lepiej niz ogol ale ich sytuacja powinna sie poprawiac szybciej niz ogolu
+
+unikac analizowania wszystkich absolwentow danej uczelnie nie dzielac ich najpierw na kierunki
+
+wazne uwzglednic doswiadczenie pracy etatowej
+
+mamy tez info czy dany absolwent jeszcze studiowal po zakonczeniu studiow
+
+
+Ryzyko bezrobocia 
+
+Wskaźnik ryzyka bezrobocia wyliczany jest dla całego badanego okresu oraz dla kolejnych lat po
+uzyskaniu dyplomu. Wskaźniki te zestawione są z informacją na temat stopy bezrobocia w Polsce
+w latach kalendarzowych objętych monitoringiem
+
+Względny Wskaźnik Bezrobocia (WWB) pokazuje ryzyko bezrobocia absolwenta w stosunku
+do stopy bezrobocia w jego powiecie zamieszkania.
+
+
+Oba poniżej moga byc powyzej 100 % bo mozna byc na wiecejniez jednej uczelni
+
+Procent osób, które po porzuceniu dotychczasowych studiów studiowały na innej uczelni
+Procent osób, które po porzuceniu dotychczasowych studiów studiowały na tej samej uczelni
+
+
+
+Dostepne dane 
+
+Raporty te to:
+a. Praca i bezrobocie, który zawiera informacje na temat czasu poszukiwania pracy przez
+absolwentów oraz form i stabilności zatrudnienia,
+b. Wynagrodzenia, który zawiera informacje o osiąganych wynagrodzeniach ze wszystkich
+źródeł oraz z pracy etatowej
+c. Doświadczenie pracy, który zawiera porównanie wynagrodzeń, czasu poszukiwania pracy
+i ryzyka bezrobocia absolwentów z doświadczeniem i bez doświadczenia pracy przed
+dyplomem,
+d. Praca a miejsce zamieszkania, który zawiera porównanie wynagrodzeń, czasu poszukiwania
+pracy i ryzyka bezrobocia absolwentów w zależności od ich miejsca zamieszkania.
+e. Praca a dalsze studia, który zawiera informacje dotyczące doświadczenia studiowania przez
+absolwentów, w szczególności nauki na studiach doktoranckich lub w szkole doktorskiej.
+f. Porównanie roczników, który przedstawia syntetyczne zestawienia wskaźników
+charakteryzujących sytuacje absolwentów z lat 2014 i 2015 w analogicznych okresach po
+ukończeniu studiów.
+Powyższe raporty są dostępne na trzech poziomach:
+a. kierunku,
+b. szkoły wyższej,
+c. ogólnopolskim.
+
+
+bnmonitor - 
+https://manueleleonelli.github.io/bnmonitor/
+https://youtu.be/dYLOyUeSyzw?t=986
+
+
+measure arc strength 
+https://www.bnlearn.com/documentation/man/arc.strength.html
+plot arc strength
+https://www.bnlearn.com/documentation/man/strength.plot.html
+
+
+consider numpyro <https://danmackinlay.name/notebook/pyro.html> "

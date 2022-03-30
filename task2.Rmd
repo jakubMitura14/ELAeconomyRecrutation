@@ -1,0 +1,297 @@
+---
+title: "task 2"
+output: html_notebook
+---
+#Polecenie
+Weźmy pod uwagę wszystkie kierunki, które mają słowo "informatyka" w nazwie. W zbiorze są
+zarówno informacje o absolwentach studiów I stopnia, jak również II stopnia. Skupiając się tylko na tych
+kierunkach, na których co najmniej 25 osób zdobyło licencjat oraz 25 osób obroniło tytuł zawodowy
+magistra, zaprezentuj jak kształtują się zarobki absolwentów I i II stopnia pięć lat od uzyskania dyplomu.
+Zaproponuj wskaźnik opisujący "zwrot z inwestycji", polegającej na zdobyciu tytułu zawodowego
+magistra dla każdego z tych kierunków. Zaprezentuj dane w dowolny sposób. Dołącz skrypt R lub Python
+
+
+
+
+zaprezentuj jak kształtują się zarobki absolwentów I i II stopnia pięć lat od uzyskania dyplomu.
+Zaproponuj wskaźnik opisujący "zwrot z inwestycji", polegającej na zdobyciu tytułu zawodowego
+magistra dla każdego z tych kierunków. Zaprezentuj dane w dowolny sposób. Dołącz skrypt R lub Python
+
+
+
+```{r}
+library(tidyverse) 
+library(tibble)
+library(purrr)
+library(reshape2)
+library(ggplot2)
+library(ggthemes)
+library(ggpubr)
+
+graduates_major_data_1_ <- read_delim("graduates-major-data (1).csv", 
+    delim = ";", escape_double = FALSE, col_types = cols(P_ROKDYP = col_integer(), 
+        P_KIERUNEK_ID = col_integer(), P_N = col_integer(), 
+        P_N_WZUS = col_integer(), P_N_POZAZUS = col_integer(), 
+        P_PROC_WZUS = col_integer(), P_PROC_POZAZUS = col_integer()), 
+    trim_ws = TRUE)
+tib0 <-as_tibble(graduates_major_data_1_)
+
+```
+
+
+#Plan
+filter
+0) ma słowo informatyka w nazwie
+1)co najmniej 25 osób zdobyło licencjat %and% 25 osób obroniło tytuł zawodowy magistra-- w zalezności od tabeli
+2)join w celu polaczenia danych dla absolwentow studiów I stopnia, jak również II stopnia
+3)kierunki ze słowem "informatyka" w nazwie 
+4)wykres zarobki absolwentów I i II stopnia pięć lat od uzyskania dyplomu
+5) Zaproponuj wskaźnik opisujący "zwrot z inwestycji", polegającej na zdobyciu tytułu zawodowego magistra dla każdego z tych kierunków
+  a) na przykład o ile wiecej sa w stanie zarobić niż ci z I stopniem jedynie - jak szybko sa w stanie nadobić te pieniadze co inzynierowie zarobili podczas gdy Ci studiowali uwzglednic mozna czy pracowali podczas studiów II stopnia
+
+
+```{r}
+primTibble<-as_tibble(graduates_major_data_1_)%>%
+select(P_KIERUNEK_NAZWA,P_POZIOM,P_N,P_E_ZAR_P5,P_ME_ZAR_P5,P_N_DOSW_REKR,P_N_DOSW_STUDIA,P_N_NDOSW  ) %>%
+drop_na(P_E_ZAR_P5,P_ME_ZAR_P5,P_N )%>% #jesli nie mamy danych ignorujemy 
+# frazy jak " - k. unikatowy" i "Makrokierunek -"  nie dodaja nowych wiadomosci 
+mutate(P_KIERUNEK_NAZWA = map_chr(P_KIERUNEK_NAZWA, ~str_replace(.x, 
+                                         pattern = " - k. unikatowy", 
+                                         replacement = "")))%>%
+mutate(P_KIERUNEK_NAZWA = map_chr(P_KIERUNEK_NAZWA, ~str_replace(.x, 
+                                         pattern = "Makrokierunek -", 
+                                         replacement = "")))%>%  
+mutate(P_KIERUNEK_NAZWA = map_chr(P_KIERUNEK_NAZWA, ~tolower(.x)))%>% # tak aby wyszukiwanie nie bylo zalezne od wielkosci liter   
+filter(str_detect(P_KIERUNEK_NAZWA, "informatyka"))%>% # kierunki z słowem informatyka w nazwie
+group_by(P_KIERUNEK_NAZWA,P_POZIOM)%>%# oddzielnie traktujemy studia inzynierskie i magisterskie 
+summarise(mediana_kierunek = median(P_ME_ZAR_P5, na.rm = TRUE)
+          ,srednia_Kierunek = mean(P_E_ZAR_P5, na.rm = TRUE)
+          ,P_NSum = sum(P_N, na.rm = TRUE)
+          ,N_DOSW_REKR=  sum(P_N_DOSW_REKR, na.rm = TRUE)
+          ,N_DOSW_STUDIA=  sum(P_N_DOSW_STUDIA, na.rm = TRUE)
+          ,N_NDOSW=  sum(P_N_NDOSW, na.rm = TRUE)
+          )%>% # agregacja danych o kierunku pomiedzy uczelniami
+filter(P_NSum>25)%>%#interesuja nas tylko odpowiednio liczne kierunki
+group_by(P_KIERUNEK_NAZWA)%>%# teraz chcemy jedynie kierunkow które spełniły kryterium liczności zarowno dla studiow magisterskich jak i licencjackich
+filter(n()==2)
+
+primTibble
+```
+```{r}
+
+
+ggplot(data = primTibble)+
+    facet_wrap(~P_KIERUNEK_NAZWA, labeller = label_wrap_gen(17)) +
+  geom_bar(aes(P_POZIOM, mediana_kierunek, fill = P_POZIOM), stat = "identity")+
+  scale_x_discrete(labels = function(x) str_wrap(x, width = 10))+ 
+  xlab("")+ 
+  ylab("mediana")+ 
+  guides(fill=guide_legend(title="poziom"))
+
+
+# ggplot(data = primTibble)+
+#     facet_wrap(~P_KIERUNEK_NAZWA) +
+#   geom_bar(aes(P_POZIOM, 'mediana kierunek', fill = P_POZIOM), stat = "identity")+
+#   scale_x_discrete(labels = function(x) str_wrap(x, width = 10))
+```
+```{r}
+namesOfIntrest<- primTibble %>%
+  select(P_KIERUNEK_NAZWA)%>%
+  distinct
+
+
+tibOnlyFacultyOfIntr<- tib0%>% 
+select(P_KIERUNEK_NAZWA,P_POZIOM,P_N,       P_E_ZAR_NDOSW_P1, P_E_ZAR_NDOSW_P2,  P_E_ZAR_NDOSW_P3, P_E_ZAR_NDOSW_P4, P_E_ZAR_NDOSW_P5,P_E_ZAR_PODCZAS_STUDIOW_DOSW_REKR,P_E_ZAR_PODCZAS_STUDIOW_DOSW_STUDIA) %>%  
+  # frazy jak " - k. unikatowy" i "Makrokierunek -"  nie dodaja nowych wiadomosci 
+mutate(P_KIERUNEK_NAZWA = map_chr(P_KIERUNEK_NAZWA, ~str_replace(.x, 
+                                         pattern = " - k. unikatowy", 
+                                         replacement = "")))%>%
+mutate(P_KIERUNEK_NAZWA = map_chr(P_KIERUNEK_NAZWA, ~str_replace(.x, 
+                                         pattern = "Makrokierunek -", 
+                                         replacement = "")))%>%  
+mutate(P_KIERUNEK_NAZWA = map_chr(P_KIERUNEK_NAZWA, ~tolower(.x)))%>% 
+filter(P_KIERUNEK_NAZWA %in% namesOfIntrest$P_KIERUNEK_NAZWA)
+tibOnlyFacultyOfIntr
+```
+
+P_E_ZAR_PODCZAS_STUDIOW_DOSW_REKR	Średnie miesięczne wynagrodzenie ze wszystkich źródeł w trakcie studiów absolwentów wśród absolwentów z doświadczeniem pracy przed uzyskaniem dyplomu
+P_E_ZAR_PODCZAS_STUDIOW_DOSW_STUDIA	Średnie miesięczne wynagrodzenie ze wszystkich źródeł w trakcie studiów absolwentów nie mających doświadczenia pracy przed rozpoczęciem studiów, ale uzyskali je w trakcie studiów
+
+
+```{r}
+#zwraca model liniowy dla danego kierunku i dla danego poziomu studiów - magisterskie lub licencjackie
+getTibForLinModel<-function(nazwaKierunku,stopienNum,tibOnlyFacultyOfIntr ){
+  
+  resTib<-tibOnlyFacultyOfIntr%>%
+  filter(P_KIERUNEK_NAZWA==nazwaKierunku)%>%
+  filter(P_POZIOM==stopienNum)%>%
+  select(P_E_ZAR_NDOSW_P1,P_E_ZAR_NDOSW_P2, P_E_ZAR_NDOSW_P3,P_E_ZAR_NDOSW_P4, P_E_ZAR_NDOSW_P5)  %>%
+  rownames_to_column%>%
+  pivot_longer(, cols=-rowname)%>%
+  mutate(name = map_chr(name, ~str_replace(.x, 
+                                            pattern = "P_E_ZAR_NDOSW_P1", 
+                                            replacement = '1')))%>%
+  mutate(name = map_chr(name, ~str_replace(.x, 
+                                            pattern = "P_E_ZAR_NDOSW_P2", 
+                                            replacement = '2')))%>%
+  mutate(name = map_chr(name, ~str_replace(.x, 
+                                            pattern = "P_E_ZAR_NDOSW_P3", 
+                                            replacement = '3')))%>%
+  mutate(name = map_chr(name, ~str_replace(.x, 
+                                          pattern = "P_E_ZAR_NDOSW_P4", 
+                                            replacement = '4')))%>%
+  mutate(name = map_chr(name, ~str_replace(.x,     pattern = "P_E_ZAR_NDOSW_P5", 
+                                            replacement = '5')))%>%
+  mutate(across(name, as.integer))%>%
+  select(name,value)%>%
+  drop_na(value)
+  
+  #model<-lm(value~name , resTib)
+  
+  return(resTib)
+}
+
+```
+
+
+
+Plan do oszacowania czasu zwrotu uczęścania na studia magisterskie
+Zalozenia 
+  - zakładamy że studenci studiow magisterskich stanowią głównie studenci którzy skończyli studia inżynierskie na tym samym kierunku
+  - zakłądamy że doświadczenie jest ważną zmienną wpływającą na wysokość zarobków - jako że celem jest jak najbardziej izolowana ocena wartości dodanej dzięki studiom porównujemy jedynie studentów bez doświadczenia - wtedy mozemy też zignorować wysokość zarobków w trakcie studiów jako że jeśli nawet one są większe od zera z dużym prawdopodobieństwem nie świadczą o pracy w zawodzie - skoro nie włączają się do doświadczenia
+- problemem jest różnica zarobków związana z miejscem zamieszkania - problem ten mógłby być potencjalnie rozwiązany przez uwzględnienie zarobków względem wartości dla powiatu - jednak w tym wypadku trudne było0by oszacowanie czasu zwrotu  zwiazanego z pojsciem na studia magisterskie
+
+Hipoteza - zarobki  po skonczeniu studiow magisterskich sa wyższe niż bez.
+
+
+```{r}
+getSinglePlotOfIncome<-function(nazwaKierunku,tibOnlyFacultyOfIntr ){
+
+
+  tibbInzynier<-getTibForLinModel(nazwaKierunku,1,tibOnlyFacultyOfIntr )%>% 
+    group_by(name)%>%
+    summarise(zarobki = mean(value, na.rm = TRUE)      )%>%
+    rename(zarobkiInz=zarobki )
+  
+  
+  tibbMagister<-getTibForLinModel(nazwaKierunku,2,tibOnlyFacultyOfIntr )%>% 
+    group_by(name)%>%
+    summarise(zarobki = mean(value, na.rm = TRUE)      )    %>%
+    rename(zarobkiMag=zarobki )
+  
+  joinedTabl<-inner_join(tibbInzynier, tibbMagister, by='name')%>%
+  add_column(diff=.$zarobkiMag- .$zarobkiInz)
+  d <- melt(joinedTabl, id.vars="name")
+  plot<-ggplot(d, aes(name,value, col=variable)) + 
+    geom_point() + 
+    stat_smooth() +
+    xlab("rok po obronie dyplomu")+ 
+  ylab("średnie zarobki")+ 
+  guides(fill=guide_legend(title="legenda"))+
+  ggtitle(nazwaKierunku)
+  return(plot)
+}
+```
+
+
+
+```{r}
+plots =namesOfIntrest$P_KIERUNEK_NAZWA%>%  
+map(function(x) getSinglePlotOfIncome( x,tibOnlyFacultyOfIntr))
+
+plots
+  
+```
+
+
+
+
+Teraz model bedzie trenowany dla kazdego kierunku oddzielnie i oddzielnie dla studiów I i II stopnia
+
+```{r}
+
+#kierunekNum = 5
+#nazwaKierunku = namesOfIntrest$P_KIERUNEK_NAZWA[kierunekNum]
+resList <- rep(1:length(namesOfIntrest$P_KIERUNEK_NAZWA))
+index=0
+for (nazwaKierunku in namesOfIntrest$P_KIERUNEK_NAZWA){
+  index<-index+1
+  resTib<-tibOnlyFacultyOfIntr%>%
+  filter(P_KIERUNEK_NAZWA==nazwaKierunku)%>%
+  filter(P_POZIOM==1)%>%
+  summarise(meanYearOne = mean(P_E_ZAR_NDOSW_P1, na.rm = TRUE),
+            meanYearTwo = mean(P_E_ZAR_NDOSW_P2, na.rm = TRUE),
+            zarDosw = mean(P_E_ZAR_PODCZAS_STUDIOW_DOSW_REKR, na.rm = TRUE),
+            zarNdosw = mean(P_E_ZAR_PODCZAS_STUDIOW_DOSW_STUDIA, na.rm = TRUE),
+  )  
+  #nie uwzgledniajac zarobkow podczas studiow
+  totalIncomeFirstTwoYears = resTib$meanYearOne[1]*12+ resTib$meanYearTwo[1]*12
+  #uwzgledniajac zarobki podczas studiow
+  totalIncomeFirstTwoYearsVerB =totalIncomeFirstTwoYears -resTib$zarDosw[1]*24-resTib$zarNdosw[1]*24
+  
+  
+  tibbInzynier<-getTibForLinModel(nazwaKierunku,1,tibOnlyFacultyOfIntr )%>%filter(name<4)
+  tibbMagister<-getTibForLinModel(nazwaKierunku,2,tibOnlyFacultyOfIntr )%>%filter(name<4)
+   
+  modelInzynier<-lm(value~name , tibbInzynier)
+  modelMagister<-lm(value~name , tibbMagister)
+  
+  
+  interceptInz = modelInzynier$coefficients[1]
+  slopeInz = modelInzynier$coefficients[2]
+  
+  interceptMag = modelMagister$coefficients[1]-totalIncomeFirstTwoYears+(resTib$zarDosw[1]+resTib$zarNdosw[1])*12
+  slopeMag = modelMagister$coefficients[2]
+  
+  x = (interceptMag-interceptInz)/(slopeInz - slopeMag)
+  resList[index]= x
+  # print(nazwaKierunku)
+  # print(x)
+}
+vec_positive <- resList     
+vec_positive[resList < 0] <- -0
+vec_positive[resList >50] <- 0
+resTib = tibble(namesOfIntrest$P_KIERUNEK_NAZWA,vec_positive  )
+
+```
+
+
+```{r}
+resTib%>%
+  rename(Kierunek ='namesOfIntrest$P_KIERUNEK_NAZWA')%>%
+ rename('lata do zwrotu inwestycji' ='vec_positive')
+
+```
+
+```{r}
+resTib
+```
+
+
+
+```{r}
+ggplot(data=resTib, aes(x=namesOfIntrest$P_KIERUNEK_NAZWA, y=vec_positive)) +
+  geom_bar(stat="identity", fill = "#FF2222")+ 
+  xlab("")+ 
+  coord_flip()+
+  ylab("lata ")+
+  ggtitle("")
+```
+
+
+
+
+
+
+
+```{r}
+# # ggarrange(plotlist=plots, ncol=1, align="hv", labels = namesOfIntrest$P_KIERUNEK_NAZWA ,common.legend = TRUE,)
+# # 
+# ggplot() +
+# scale_x_continuous(name="x", limits=c(-40,50)) +
+# scale_y_continuous(name="y", limits=c(-40,50)) +
+# geom_abline(aes(slope=2, intercept=5,colour='#E41A1C'))  +
+# geom_abline(aes(slope=3, intercept=1))  
+```
+
+
